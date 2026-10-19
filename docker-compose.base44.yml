@@ -1,0 +1,52 @@
+# Base44 development environment — Loghmeh
+# Frontend: Vite dev server (client/) on host port 3000, proxying /api to the Express API.
+# Backend: Express API (server/) with JSON-file persistence (server/data/).
+# Both services run from the cloned source with live reload.
+
+services:
+  web:
+    image: node:22
+    working_dir: /workspace/client
+    command: ["sh", "-ec", "npm install --no-audit --no-fund --loglevel=error && exec npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"]
+    environment:
+      - BASE44_PREVIEW_MODE
+      - BASE44_SANDBOX_HOST_DOMAIN
+      - VITE_API_PROXY=http://api:4000
+    volumes:
+      - ${BASE44_PROJECT_ROOT:-.}:/workspace
+      - web_node_modules:/workspace/client/node_modules
+    ports:
+      - "3000:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: on-failure
+
+  api:
+    image: node:22
+    working_dir: /workspace/server
+    command: ["sh", "-ec", "npm install --no-audit --no-fund --loglevel=error && exec node --watch src/index.js"]
+    environment:
+      - PORT=4000
+    volumes:
+      - ${BASE44_PROJECT_ROOT:-.}:/workspace
+      - api_node_modules:/workspace/server/node_modules
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: on-failure
+
+volumes:
+  web_node_modules:
+  api_node_modules:
